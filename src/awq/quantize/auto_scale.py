@@ -7,6 +7,7 @@ from transformers.models.opt.modeling_opt import OPTDecoderLayer
 from transformers.models.llama.modeling_llama import LlamaDecoderLayer, LlamaRMSNorm
 from transformers.activations import GELUActivation
 from transformers.models.qwen2.modeling_qwen2 import Qwen2RMSNorm, Qwen2DecoderLayer
+from transformers.models.qwen3.modeling_qwen3 import Qwen3RMSNorm, Qwen3DecoderLayer
 
 from .qmodule import ScaledActivation
 from ..utils.module import get_op_by_name, get_op_name, set_op_by_name
@@ -212,7 +213,7 @@ def auto_scale_block(module, module_kwargs, w_bit, q_config, input_feat):
             )
         )
 
-    elif isinstance(module, (LlamaDecoderLayer, Qwen2DecoderLayer)):
+    elif isinstance(module, (LlamaDecoderLayer, Qwen2DecoderLayer, Qwen3DecoderLayer)):
         # attention input
         scales_list.append(
             _auto_get_scale(

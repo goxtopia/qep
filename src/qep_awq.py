@@ -18,6 +18,7 @@ from transformers.models.bloom.modeling_bloom import BloomGelu
 from transformers.models.llama.modeling_llama import LlamaRMSNorm
 from transformers.activations import GELUActivation
 from transformers.models.qwen2.modeling_qwen2 import Qwen2RMSNorm
+from transformers.models.qwen3.modeling_qwen3 import Qwen3RMSNorm
 from awq.quantize.qmodule import ScaledActivation
 from awq.quantize.auto_scale import scale_fc_fc, scale_gelu_fc, scale_ln_fcs
 
@@ -110,7 +111,7 @@ def apply_scale_config(module, scale_config, input_feat_dict=None):
     if isinstance(prev_op, nn.Linear):
         assert len(layers) == 1
         scale_fc_fc(prev_op, layers[0], scales)
-    elif isinstance(prev_op, (nn.LayerNorm, LlamaRMSNorm, Qwen2RMSNorm)):
+    elif isinstance(prev_op, (nn.LayerNorm, LlamaRMSNorm, Qwen2RMSNorm, Qwen3RMSNorm)):
         scale_ln_fcs(prev_op, layers, scales)
     elif isinstance(prev_op, (nn.GELU, BloomGelu, GELUActivation, nn.SiLU)):
         new_module = ScaledActivation(prev_op, scales)
@@ -180,6 +181,13 @@ def run_awq_with_QEP(model, dev,
             inps_AWQ.append(inp)
             layer_kwargs_AWQ.update(kwargs)
             raise ValueError  # early exit to break later inference
+            
+        def __getattr__(self, name):
+            # 这种写法稍微有点风险，但通常有效
+            try:
+                return super().__getattr__(name)
+            except AttributeError:
+                return getattr(self.module, name)
 
     # patch layer 0 to catch input and kwargs
     layers[0] = CatcherAWQ(layers[0])
@@ -201,6 +209,13 @@ def run_awq_with_QEP(model, dev,
             cache['i'] += 1
             cache['layer_kwargs'].update(kwargs)
             raise ValueError
+            
+        def __getattr__(self, name):
+            # 这种写法稍微有点风险，但通常有效
+            try:
+                return super().__getattr__(name)
+            except AttributeError:
+                return getattr(self.module, name)
     
     layers[0] = Catcher(layers[0])
     for batch in dataloader:
@@ -246,6 +261,7 @@ def run_awq_with_QEP(model, dev,
             )
         inps_AWQ = inps_AWQ.to(next(layer.parameters()).device)  # in case multi-gpu
         # get output as next layer's input
+        # print(layer_kwargs_AWQ)
         inps_AWQ = layer(inps_AWQ, **layer_kwargs_AWQ)[0]
         for h in handles:
             h.remove()
